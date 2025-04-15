@@ -1,5 +1,11 @@
 #!/system/bin/sh
 
+# 检查脚本运行环境
+if [ ! "$ASH_STANDALONE" ]; then
+    echo "[错误] 请在独立模式运行！"
+    exit 1
+fi
+
 Root="${0%/*}"
 Core="$Root/bin/bash"
 

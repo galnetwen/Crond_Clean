@@ -13,16 +13,9 @@ White="$Root/config/白名单.prop"
 # 参数：
 #   $1: 日志信息
 #   $2: 清空文件(可选)
-# 返回值：
-#   1: 未初始化
 info() {
-    local news="${1:-"尚未传入信息"}"
+    local news="${1:-"Hello World!"}"
     local mode="${2:-0}"
-
-    if [[ ! -d "$Temp" ]]; then
-        echo "[错误] 未执行初始化函数！"
-        return 1
-    fi
 
     if [ "$mode" -eq 1 ]; then
         : >"$Temp/log"
@@ -38,25 +31,33 @@ info() {
 init() {
     if [[ ! -d "$Task" ]]; then
         mkdir -p "$Task"
+        chmod 755 "$Task"
     fi
 
     if [[ ! -d "$Temp" ]]; then
         mkdir -p "$Temp"
+        chmod 755 "$Temp"
     fi
 
     echo 0 >"$Temp/dir"
     echo 0 >"$Temp/file"
-    echo 0 >"$Temp/lock"
-    : >"$Temp/omit"
 
-    # 检查备份文件是否存在
-    if [[ -f "$Note.bak" ]]; then
+    : >"$Temp/lock"
+    : >"$Temp/log"
+    : >"$Temp/omit"
+    : >"$Task/root"
+
+    chmod 644 "$Task/root"
+    find "$Temp" -type f -exec chmod 644 {} \;
+
+    # 检查配置文件是否存在
+    if [[ -f "$Note.bak" && -f "$Time" && -f "$Black" && -f "$White" ]]; then
         cp -f "$Note.bak" "$Note"
-        info "[信息] 程序已初始化完成！" 1
+        info "[信息] 程序已初始化完成！"
         return 0
     else
-        info "[警告] 程序已初始化失败！"
-        info "[错误] 模块备份文件被删！"
+        info "[错误] 程序已初始化失败！"
+        info "[警告] 模块配置文件缺失！"
         return 1
     fi
 }
@@ -70,10 +71,10 @@ note() {
     local file="$2"
     local note
 
-    if [ -n "$(magisk -v 2>/dev/null)" ]; then
-        note="🗑️ 本次运行已清除: 📃 $file 个黑名单文件 | 🗂️ $dir 个黑名单目录"
-    else
+    if [[ "$KSU" || "$APATCH" ]]; then
         note="🗑️ 本次运行已清除:\\\\n📃 $file 个黑名单文件\\\\n🗂️ $dir 个黑名单目录"
+    else
+        note="🗑️ 本次运行已清除: 📃 $file 个黑名单文件 | 🗂️ $dir 个黑名单目录"
     fi
 
     sed -i "/^description=/c description=$note" "$Note"
@@ -86,24 +87,21 @@ note() {
 kill() {
     local task=0
     local data
-    local meta
 
-    while
-        data=$(pgrep -f "$Task" | grep -v $$)
-        [[ ! -z "$data" ]]
-    do
-        task=1
-        info "[信息] 定时任务正在运行，正在结束..."
+    while data=$(pgrep -f "$Task") && [[ -n "$data" ]]; do
+        info "[信息] 定时任务正在结束..."
 
         for meta in $data; do
             info "[进程] $meta"
         done
 
         pkill -f "$Task"
+        ((task++))
+
         sleep 1
     done
 
-    if [[ $task -eq 1 ]]; then
+    if [[ "$task" -gt 0 ]]; then
         info "[信息] 定时任务已经结束。"
         return 0
     else
@@ -116,31 +114,30 @@ kill() {
 #   0: 成功运行
 #   1: 运行失败
 task() {
-    local time=$(grep -vE '^$|#' "$Time" | head -n 1 | tr -d '\n\r')
+    local time=$(grep -vE '^$|#' "$Time" | head -n 1 | tr -d '\r\n')
     local task
     local data
 
     # KernelSU
-    if [[ -f "/data/adb/ksud" ]]; then
+    if [[ "$KSU" ]]; then
         task="/data/adb/ksu/bin/busybox crond"
 
     # APatch
-    elif [[ -f "/data/adb/apd" ]]; then
+    elif [[ "$APATCH" ]]; then
         task="/data/adb/ap/bin/busybox crond"
 
     # Magisk
     else
-        # task="$(magisk --path)/.magisk/busybox/crond"
         task="/data/adb/magisk/busybox crond"
     fi
 
     printf "%s %s %s %s\n" "$time" "$Core" "$Root/main.sh" "lock main" >"$Task/root"
-    $task -c $Task
+    $task -c "$Task"
     sleep 1
 
-    data=$(pgrep -f "$Task" | grep -v $$)
+    data=$(pgrep -f "$Task")
 
-    if [[ ! -z "$data" ]]; then
+    if [[ -n "$data" ]]; then
         data=$(echo "$data" | head -n 1)
 
         info "[信息] 定时任务成功运行！"
@@ -149,7 +146,7 @@ task() {
 
         return 0
     else
-        info "[警告] 定时任务运行失败！"
+        info "[错误] 定时任务运行失败！"
         return 1
     fi
 }
@@ -177,17 +174,17 @@ read_file() {
 # 返回值：匹配的文件或目录路径
 make_list() {
     local data="$1"
-    local meta=()
+    local form=()
 
     for path in $data; do
-        if [ -e "$path" ]; then
+        if [[ -e "$path" ]]; then
             path="${path%/}"
-            meta+=("$path")
+            form+=("$path")
         fi
     done
 
-    if [ ${#meta[@]} -gt 0 ]; then
-        echo "${meta[@]}"
+    if [[ "${#form[@]}" -gt 0 ]]; then
+        echo "${form[@]}"
     fi
 }
 
@@ -201,8 +198,8 @@ this_data() {
     local data="$1"
     local meta="$2"
 
-    [[ -d "$data" && ! "${data: -1}" == "/" ]] && data="$data/"
-    [[ -d "$meta" && ! "${meta: -1}" == "/" ]] && meta="$meta/"
+    [[ -d "$data" && "${data: -1}" != "/" ]] && data="$data/"
+    [[ -d "$meta" && "${meta: -1}" != "/" ]] && meta="$meta/"
 
     # 检查路径开头是否匹配
     [[ "$meta" == "$data"* ]] || [[ "$data" == "$meta"* ]]
@@ -242,18 +239,16 @@ main() {
 
         # 遍历白名单
         for white in "${match_white[@]}"; do
-            local mark
+            local mark=0
 
             # 检查是否已打印过
             if grep -q "^$white$" "$omit"; then
                 mark=1
-            else
-                mark=0
             fi
 
             # 跳过全匹配的条目
             if [[ "$black" == "$white" ]]; then
-                if [[ $mark -eq 0 ]]; then
+                if [ "$mark" -eq 0 ]; then
                     info "[跳过] 白名单条目: $white"
                     echo "$white" >>"$omit"
                 fi
@@ -263,7 +258,7 @@ main() {
 
             # 跳过父子关系条目
             elif this_data "$black" "$white"; then
-                if [[ $mark -eq 0 ]]; then
+                if [ "$mark" -eq 0 ]; then
                     info "----------------"
                     info "[跳过] 黑名单条目: $black"
                     info "[关联] 白名单条目: $white"
@@ -276,7 +271,7 @@ main() {
             fi
         done
 
-        if [[ $skip -eq 1 ]]; then
+        if [ "$skip" -eq 1 ]; then
             continue
         fi
 
@@ -284,14 +279,14 @@ main() {
         if [[ -d "$black" ]]; then
             rm -rf "$black" && {
                 info "[删除] 黑名单目录: $black/"
-                let dir++
+                ((dir++))
             }
 
         # 如果是文件
         elif [[ -f "$black" ]]; then
             rm -rf "$black" && {
                 info "[删除] 黑名单文件: $black"
-                let file++
+                ((file++))
             }
         fi
     done
@@ -313,7 +308,7 @@ lock() {
     local file="$Temp/lock"
     local node="${1:-default}"
 
-    if [ -z "$lock" ]; then
+    if [[ -z "$lock" ]]; then
         info "[错误] 获取锁屏状态失败！"
         return 1
     fi
@@ -390,8 +385,14 @@ code_work() {
     local node="$1"
 
     # 检查是否传入函数
-    if [ $# -eq 0 ] || [ -z "$1" ]; then
+    if [[ "$#" -eq 0 || -z "$1" ]]; then
         help
+        exit 1
+    fi
+
+    # 检查脚本运行环境
+    if [[ ! "$ASH_STANDALONE" ]]; then
+        echo "[错误] 请在独立模式运行！"
         exit 1
     fi
 

@@ -1,5 +1,11 @@
 #!/system/bin/sh
 
+# 检查脚本运行环境
+if [ ! "$ASH_STANDALONE" ]; then
+    echo "[错误] 请在独立模式运行！"
+    exit 1
+fi
+
 Root="${0%/*}"
 Core="$Root/bin/bash"
 
@@ -14,7 +20,7 @@ if [ $? -ne 0 ]; then
 fi
 
 # 等待系统启动完成
-while [[ "$(getprop sys.boot_completed)" != "1" ]]; do
+while [ "$(getprop sys.boot_completed)" != "1" ]; do
     sleep 2
 done
 
@@ -33,10 +39,10 @@ Wait=60
 Time=$(($(date +%s) + Wait))
 
 # 等待用户解锁屏幕
-while [ $(date +%s) -lt $Time ]; do
+while [ "$(date +%s)" -lt "$Time" ]; do
     Lock=$($Core $Root/main.sh lock)
 
-    if [[ $? -eq 0 && "$Lock" == "解锁" ]]; then
+    if [ $? -eq 0 ] && [ "$Lock" = "解锁" ]; then
         $Core $Root/main.sh lock main
         Auld=1
         break
