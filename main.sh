@@ -101,7 +101,7 @@ kill() {
         sleep 1
     done
 
-    if [[ "$task" -gt 0 ]]; then
+    if [ "$task" -gt 0 ]; then
         info "[信息] 定时任务已经结束。"
         return 0
     else
@@ -114,8 +114,8 @@ kill() {
 #   0: 成功运行
 #   1: 运行失败
 task() {
-    local time=$(grep -vE '^$|#' "$Time" | head -n 1 | tr -d '\r\n')
     local task
+    local time
     local data
 
     # KernelSU
@@ -131,8 +131,10 @@ task() {
         task="/data/adb/magisk/busybox crond"
     fi
 
+    time=$(grep -vE '^$|#' "$Time" | head -n 1 | tr -d '\r\n')
     printf "%s %s %s %s\n" "$time" "$Core" "$Root/main.sh" "lock main" >"$Task/root"
     $task -c "$Task"
+
     sleep 1
 
     data=$(pgrep -f "$Task")
@@ -176,15 +178,15 @@ make_list() {
     local data="$1"
     local form=()
 
-    for path in $data; do
-        if [[ -e "$path" ]]; then
-            path="${path%/}"
-            form+=("$path")
+    for line in $data; do
+        if [[ -e "$line" ]]; then
+            line="${line%/}"
+            form+=("$line")
         fi
     done
 
-    if [[ "${#form[@]}" -gt 0 ]]; then
-        echo "${form[@]}"
+    if [ "${#form[@]}" -gt 0 ]; then
+        printf "%s\n" "${form[@]}"
     fi
 }
 
@@ -207,22 +209,26 @@ this_data() {
 
 # 函数：执行遍历名单删除操作
 main() {
-    # 定义黑名单和白名单数组
-    local black_list=()
-    local white_list=()
+    # 声明黑名单和白名单数组
+    local -a black_list
+    local -a white_list
+    local -a match_black
+    local -a match_white
 
     # 读取黑名单和白名单文件
     read_file "$Black" black_list
     read_file "$White" white_list
 
     # 匹配黑名单和白名单条目
-    local match_black=($(for data in "${black_list[@]}"; do make_list "$data"; done))
-    local match_white=($(for data in "${white_list[@]}"; do make_list "$data"; done))
+    mapfile -t match_black < <(for data in "${black_list[@]}"; do make_list "$data"; done)
+    mapfile -t match_white < <(for data in "${white_list[@]}"; do make_list "$data"; done)
 
     # 读取计数器
-    local dir=$(cat "$Temp/dir")
-    local file=$(cat "$Temp/file")
+    local dir
+    local file
     local omit="$Temp/omit"
+    file=$(<"$Temp/file")
+    dir=$(<"$Temp/dir")
 
     local black
 
@@ -304,9 +310,11 @@ main() {
 #   $1: 函数名称(可选)
 # 返回值：锁屏状态
 lock() {
-    local lock="$(dumpsys window policy | grep 'mInputRestricted' | cut -d= -f2)"
+    local lock
     local file="$Temp/lock"
     local node="${1:-default}"
+
+    lock=$(dumpsys window policy | grep 'mInputRestricted' | cut -d= -f2)
 
     if [[ -z "$lock" ]]; then
         info "[错误] 获取锁屏状态失败！"
