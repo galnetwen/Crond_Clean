@@ -16,12 +16,14 @@ White="$Root/config/白名单.prop"
 info() {
     local news="${1:-"Hello World!"}"
     local mode="${2:-0}"
+    local time
 
     if [ "$mode" -eq 1 ]; then
         : >"$Temp/log"
     fi
 
-    echo "$(date '+%Y-%m-%d %H:%M:%S') $news" >>"$Temp/log"
+    time=$(date '+%Y-%m-%d %H:%M:%S')
+    printf "%s %s\n" "$time" "$news" >>"$Temp/log"
 }
 
 # 函数：初始化程序的临时目录
@@ -176,7 +178,7 @@ read_file() {
 # 返回值：匹配的文件或目录路径
 make_list() {
     local data="$1"
-    local form=()
+    local -a form
 
     for line in $data; do
         if [[ -e "$line" ]]; then
@@ -223,13 +225,9 @@ main() {
     mapfile -t match_black < <(for data in "${black_list[@]}"; do make_list "$data"; done)
     mapfile -t match_white < <(for data in "${white_list[@]}"; do make_list "$data"; done)
 
-    # 读取计数器
-    local dir
-    local file
+    local dir=0
+    local file=0
     local omit="$Temp/omit"
-    file=$(<"$Temp/file")
-    dir=$(<"$Temp/dir")
-
     local black
 
     # 遍历黑名单
@@ -297,12 +295,19 @@ main() {
         fi
     done
 
-    # 写入计数器
-    echo "$dir" >"$Temp/dir"
-    echo "$file" >"$Temp/file"
+    # 计数器操作
+    if ((dir > 0 || file > 0)); then
+        # 计算删除操作次数
+        dir=$((dir + $(<"$Temp/dir")))
+        file=$((file + $(<"$Temp/file")))
 
-    # 更新模块描述信息
-    note "$dir" "$file"
+        # 写入删除操作总数
+        echo "$dir" >"$Temp/dir"
+        echo "$file" >"$Temp/file"
+
+        # 更新模块描述信息
+        note "$dir" "$file"
+    fi
 }
 
 # 函数：检测设备实时锁屏状态

@@ -17,8 +17,8 @@ else
     $Core $Root/main.sh init
 
     if [ $? -ne 0 ]; then
-        echo "[警告] 程序已初始化失败！"
-        echo "[错误] 模块备份文件被删！"
+        echo "[错误] 程序已初始化失败！"
+        echo "[警告] 模块配置文件缺失！"
     else
         $Core $Root/main.sh task
 

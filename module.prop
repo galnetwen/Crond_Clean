@@ -1,6 +1,6 @@
 id=com.haremu.clean
 name=Crond_Clean
-version=v1.2
-versionCode=3
+version=v1.3
+versionCode=4
 author=galnetwen
 description=⌛️ 等待刷新或重启...

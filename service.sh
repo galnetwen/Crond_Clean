@@ -43,6 +43,8 @@ while [ "$(date +%s)" -lt "$Time" ]; do
     Lock=$($Core $Root/main.sh lock)
 
     if [ $? -eq 0 ] && [ "$Lock" = "解锁" ]; then
+        sleep 10
+
         $Core $Root/main.sh lock main
         Auld=1
         break
